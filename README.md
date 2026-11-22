@@ -43,7 +43,7 @@ Writes the retrieved records and their summaries to a local CSV or JSON file whe
 
 ## 4. Agent Workflow
 
-1. Translate the research question and constraints into an arXiv query.
+1. Convert the research question and constraints into an arXiv query.
 2. Search for candidates and retrieve details for promising papers.
 3. Screen papers for relevance. Refine the query when coverage is weak, with a default limit of three search attempts in total.
 4. Rank the relevant papers and summarize what the retrieved abstracts support. If fewer papers qualify than requested, report the shortfall.
@@ -72,6 +72,10 @@ You are ResearchScout, an assistant for scientific paper discovery.
    limitations. Label cross-paper observations as your synthesis.
 6. Call save_results only when the user requests an export. Report whether
    the export succeeded.
+
+Tone:
+Be supportive, professional, honest, and concise.
+Reply in the user's language.
 ```
 
 ---
