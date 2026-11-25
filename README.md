@@ -1,91 +1,56 @@
 # Agentic AI Research Assistant 🔎
 
-ResearchScout is a tool-using AI assistant designed to help researchers find, screen, and summarize scientific papers from arXiv. It links each paper to its source and can export results as CSV or JSON on request.
-
-This is my first agentic AI project. I chose literature discovery to practice translating a research question into a search query, selecting tools, refining weak searches, and grounding an answer in retrieved evidence. The repository currently documents the proof-of-concept design.
-
----
+ResearchScout is a Python proof of concept for finding papers on arXiv and summarizing their abstracts. This is my first agentic AI project. I chose literature discovery to practice tool calling, task delegation, and grounding answers in retrieved evidence.
 
 ## 1. Use Case
 
-A researcher asks, “Find five recent papers on agentic AI in healthcare and summarize the most relevant findings.” The assistant turns the request into a search query and screens the returned titles and abstracts for relevance. If the first search yields too few relevant papers, the assistant can refine its terms and search again.
+A researcher can ask, “Find one arXiv paper about large language models and summarize its abstract.” The supervisor delegates discovery to a search agent, then sends the retrieved material to a summary agent. The intended response includes the paper title, its arXiv link, and a short abstract-based summary.
 
-Users can specify a topic, keywords, a date range, and a target paper count. The planned response includes a ranked list with each paper’s title, authors, year, source link, relevance to the question, and an abstract-based summary. It can also report themes across papers and flag gaps in the evidence.
+## 2. LLM & Framework
 
----
+| Component | Role |
+| --- | --- |
+| Python 3.12 | Runs the project and its notebooks. |
+| Ollama with Llama 3.2 (`llama3.2:latest`) | Runs the local model used by the supervisor and both agents. |
+| LangChain | Builds the specialized agents with `create_agent`. |
+| LangGraph Supervisor | Connects the agents with `create_supervisor` and manages handoffs. |
+| arXiv API | Supplies paper titles, links, and abstracts through the `arxiv` Python package. |
 
-## 2. LLM & Provider
+## 3. Agent Workflow
 
-| Component | Planned choice | Role |
-| --- | --- | --- |
-| Provider | OpenAI | Provides API access to the language model. |
-| Language model | GPT-4o mini (`gpt-4o-mini`) | Interprets the request, selects tools, and summarizes retrieved evidence. |
-| Agent framework | LlamaIndex | Orchestrates tool execution in Python. |
-| Paper source | arXiv API | Supplies paper identifiers, metadata, abstracts, and source links. |
+1. **Supervisor** receives the request and delegates paper discovery to the search agent.
+2. **Search agent** builds an arXiv query and calls `PaperTools.search_papers(query, max_results)`. The tool returns each paper's title, URL, and abstract.
+3. **Supervisor** receives the search results and delegates to the summary agent when a summary is requested and abstracts are available.
+4. **Summary agent** uses the available abstracts, then returns its summary to the supervisor for the final answer.
 
----
+The supervisor compiles the workflow with `.compile()`. The shared message history keeps tool results available to both agents through `output_mode="full_history"`. The `include_agent_name="inline"` setting identifies the agent that wrote a message.
 
-## 3. Agent Tools
+## 4. Project Structure
 
-### `search_papers(query, max_results)`
+| Python component | Jupyter test |
+| --- | --- |
+| [PaperTools](src/paper_tools.py) | [01 · Search arXiv directly](notebooks/01_search_papers.ipynb) |
+| [PaperSearchAgent](src/paper_search_agent.py) | [02 · Run the search agent](notebooks/02_paper_search_agent.ipynb) |
+| [PaperSummaryAgent](src/paper_summary_agent.py) | [03 · Summarize a sample abstract](notebooks/03_paper_summary_agent.ipynb) |
+| [PaperResearchSupervisor](src/paper_research_supervisor.py) | [04 · Run both agents through the supervisor](notebooks/04_paper_research_supervisor.ipynb) |
 
-Searches arXiv using a keyword query and a result limit. Returns candidate paper identifiers and metadata for initial screening.
+Each notebook imports the classes from `src`, creates objects, and exercises one part of the workflow.
 
-### `get_paper_details(paper_id)`
+## 5. Run the Notebooks
 
-Retrieves the title, authors, date, abstract, and original source URL for a selected paper.
+From the repository folder in PowerShell, create a virtual environment and install the dependencies. Start the Ollama app before pulling the model.
 
-### `save_results(records, format)`
-
-Writes the retrieved records and their summaries to a local CSV or JSON file when the user requests an export.
-
----
-
-## 4. Agent Workflow
-
-1. Convert the research question and constraints into an arXiv query.
-2. Search for candidates and retrieve details for promising papers.
-3. Screen papers for relevance. Refine the query when coverage is weak, with a default limit of three search attempts in total.
-4. Rank the relevant papers and summarize what the retrieved abstracts support. If fewer papers qualify than requested, report the shortfall.
-5. Export the results if the user requested a file.
-
-The application is responsible for validating tool arguments, enforcing limits, and handling API errors, duplicate records, and missing fields.
-
----
-
-## 5. System Prompt
-
-```text
-You are ResearchScout, an assistant for scientific paper discovery.
-
-1. Identify the research topic, date range, and target paper count. Ask a
-   clarifying question only if you cannot make useful progress. State any
-   assumptions that affect the search.
-2. Use search_papers to discover candidates. Refine weak queries when useful,
-   with at most three search attempts unless the user asks you to continue.
-3. Use get_paper_details before making substantive claims about a paper.
-   Rank papers by relevance and link to their original source records.
-4. Base summaries on retrieved evidence. Label abstract-based summaries
-   and identify preprints when that status is known. Do not invent citations,
-   imply full-text review, or turn research findings into clinical advice.
-5. Briefly report the search scope, query refinements, relevant papers, and
-   limitations. Label cross-paper observations as your synthesis.
-6. Call save_results only when the user requests an export. Report whether
-   the export succeeded.
-
-Tone:
-Be supportive, professional, honest, and concise.
-Reply in the user's language.
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install arxiv "langchain>=1,<2" langchain-ollama langgraph-supervisor notebook
+ollama pull llama3.2:latest
+.\.venv\Scripts\python.exe -m notebook
 ```
 
----
+Open a notebook using the project's `.venv` kernel and run the cells from top to bottom. The supervisor notebook prints the handoffs and checks for search results before displaying the final answer.
 
 ## 6. Proof-of-Concept Evaluation
 
-- **Citation validity** checks that each source link resolves to the reported paper.
-- **Top-k relevance** measures how many of the highest-ranked papers address the research question.
-- **Summary faithfulness** checks that the retrieved abstract supports each summary.
-- **Tool efficiency** tracks tool calls and search retries per request.
-- **Completeness** checks that the response includes paper metadata, source links, summaries, and limitations.
+The search and summary agents have been exercised individually. A controlled test verified both supervisor handoffs and the search tool call using a simulated paper. In live supervisor tests, Llama 3.2 sometimes skipped the search tool, so end-to-end routing with Ollama and arXiv remains unverified.
 
-A possible extension is to compare a single-search workflow with an agent that refines queries and retrieves paper details as needed. The comparison would measure relevance, summary faithfulness, cost, latency, and tool use on the same research questions.
+For future evaluation, I plan to track whether the supervisor picks the correct agent, whether the top results match the research question, and whether each summary is supported by its abstract. CSV and JSON export are planned extensions.
